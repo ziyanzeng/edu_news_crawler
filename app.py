@@ -3,6 +3,8 @@ import requests
 from bs4 import BeautifulSoup
 import json
 from datetime import datetime
+from datetime import date
+from datetime import timedelta
 from collections import deque
 
 app = Flask(__name__)
@@ -113,9 +115,7 @@ def fetch_latest_news(base_url, start_date):
         
         if url == base_url:
             # 根据base_url选择解析方法
-            if 'news.eol.cn' in base_url:
-                latest_news_links = parse_eol_news(soup)
-            elif 'cse.edu.cn' in base_url:
+            if 'cse.edu.cn' in base_url:
                 latest_news_links = parse_cse_news(soup)
             elif 'moe.gov.cn' in base_url:
                 latest_news_links = parse_moe_news(soup, base_url)
@@ -130,10 +130,7 @@ def fetch_latest_news(base_url, start_date):
                     if news_url not in visited:
                         queue.append(news_url)
         else:
-            if 'news.eol.cn' in base_url:
-                news_details = extract_eol_news_details(soup, url)
-                news_data.append(news_details)
-            elif 'cse.edu.cn' in base_url:
+            if 'cse.edu.cn' in base_url:
                 title, content, date = extract_cse_news_details(soup)
                 if datetime.strptime(date[-10:], "%Y-%m-%d").date() >= start_date:
                 # if True:
@@ -211,6 +208,16 @@ def fetch_backup_latest_news(base_url):
 def fetch_news(start_date):
     print(f"Fetching news from URLs: {URL_LIST}")
     start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+    all_news_data = fetch_news_from_urls(URL_LIST, start_date)
+    # 对 JSON 数据进行编码处理并确保使用 utf-8 编码
+    json_data = json.dumps(all_news_data, ensure_ascii=False)
+    response = Response(json_data, content_type='application/json; charset=utf-8')
+    return response
+
+@app.route('/fetch_news', methods=['GET'])
+def fetch_news_default():
+    print(f"Fetching news from URLs: {URL_LIST}")
+    start_date = date.today() - timedelta(days=1)
     all_news_data = fetch_news_from_urls(URL_LIST, start_date)
     # 对 JSON 数据进行编码处理并确保使用 utf-8 编码
     json_data = json.dumps(all_news_data, ensure_ascii=False)
