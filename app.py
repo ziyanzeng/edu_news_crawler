@@ -138,7 +138,7 @@ def fetch_latest_news(base_url, start_date):
                         'url': url,
                         'title': title,
                         'content': content,
-                        'date': date
+                        'date': date[-10:]
                     })
             elif 'moe.gov.cn' in base_url:
                 title, content = extract_moe_news_details(soup)
@@ -148,7 +148,7 @@ def fetch_latest_news(base_url, start_date):
                         'url': url,
                         'title': title,
                         'content': content,
-                        'date': date
+                        'date': date[-10:]
                     })
             # 为其他网站添加相应的解析和提取逻辑...
     
