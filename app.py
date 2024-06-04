@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, Response
+from flask import Flask, jsonify, Response, request
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -8,7 +8,6 @@ from collections import deque
 app = Flask(__name__)
 
 URL_LIST = [
-    "https://news.eol.cn",
     "https://www.cse.edu.cn/index/index.html?category=59",
     "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1778/",
     "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1779/",
@@ -24,28 +23,28 @@ HEADERS = {
     "Accept-Charset": "GB2312,utf-8;q=0.7,*;q=0.7",
 }
 
-def parse_eol_news(soup):
-    news_data = []
-    news_section = soup.find('div', class_='zxdt-con')
-    if news_section:
-        latest_news_links = news_section.find_all('a', href=True)
-        for link in latest_news_links:
-            news_url = link['href']
-            if not news_url.startswith('http'):
-                news_url = 'https://news.eol.cn' + news_url
-            news_data.append(news_url)
-    return news_data
+# def parse_eol_news(soup):
+#     news_data = []
+#     news_section = soup.find('div', class_='zxdt-con')
+#     if news_section:
+#         latest_news_links = news_section.find_all('a', href=True)
+#         for link in latest_news_links:
+#             news_url = link['href']
+#             if not news_url.startswith('http'):
+#                 news_url = 'https://news.eol.cn' + news_url
+#             news_data.append(news_url)
+#     return news_data
 
-def extract_eol_news_details(soup, url):
-    title = soup.find('title').get_text(strip=True)
-    content_div = soup.find('div', class_='TRS_Editor')
-    content = content_div.get_text(strip=True) if content_div else ""
-    return {
-        'url': url,
-        'title': title,
-        'content': content,
-        'date': str(datetime.now().date())
-    }
+# def extract_eol_news_details(soup, url):
+#     title = soup.find('title').get_text(strip=True)
+#     content_div = soup.find('div', class_='TRS_Editor')
+#     content = content_div.get_text(strip=True) if content_div else ""
+#     return {
+#         'url': url,
+#         'title': title,
+#         'content': content,
+#         'date': str(datetime.now().date())
+#     }
 
 def parse_cse_news(soup):
     news_data = []
@@ -166,6 +165,48 @@ def fetch_news_from_urls(url_list, start_date):
             all_news_data.extend(news_data)
     return all_news_data
 
+def fetch_backup_latest_news(base_url):
+    # 初始化队列和新闻数据
+    queue = deque([base_url])
+    visited = set()
+    news_data = []
+
+    while queue:
+        url = queue.popleft()
+        if url in visited:
+            continue
+        visited.add(url)
+
+        response = requests.get(url)
+        response.raise_for_status()  # 确保请求成功
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        if url == base_url:
+            # 查找最新新闻的链接
+            news_section = soup.find('div', class_='zxdt-con')
+            if news_section:
+                latest_news_links = news_section.find_all('a', href=True)
+                for link in latest_news_links:
+                    news_url = link['href']
+                    if not news_url.startswith('http'):
+                        news_url = base_url + news_url
+                    if news_url not in visited:
+                        queue.append(news_url)
+        else:
+            # 提取新闻标题和内容
+            title = soup.find('title').get_text(strip=True)
+            content_div = soup.find('div', class_='TRS_Editor')
+            content = content_div.get_text(strip=True) if content_div else ""
+
+            news_data.append({
+                'url': url,
+                'title': title,
+                'content': content,
+                'date': str(datetime.now().date())
+            })
+
+    return news_data
+
 @app.route('/fetch_news/<start_date>', methods=['GET'])
 def fetch_news(start_date):
     print(f"Fetching news from URLs: {URL_LIST}")
@@ -173,6 +214,16 @@ def fetch_news(start_date):
     all_news_data = fetch_news_from_urls(URL_LIST, start_date)
     # 对 JSON 数据进行编码处理并确保使用 utf-8 编码
     json_data = json.dumps(all_news_data, ensure_ascii=False)
+    response = Response(json_data, content_type='application/json; charset=utf-8')
+    return response
+
+@app.route('/fetch_backup', methods=['GET'])
+def fetch_backup():
+    base_url = 'https://news.eol.cn'
+    news_data = fetch_backup_latest_news(base_url)
+    print(f"Fetching news from single backup site: {base_url}")
+    # 对 JSON 数据进行编码处理并确保使用 utf-8 编码
+    json_data = json.dumps(news_data, ensure_ascii=False)
     response = Response(json_data, content_type='application/json; charset=utf-8')
     return response
 
