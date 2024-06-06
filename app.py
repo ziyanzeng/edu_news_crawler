@@ -14,7 +14,12 @@ URL_LIST = [
     "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1778/",
     "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1779/",
     "http://www.moe.gov.cn/jyb_xwfb/s5148/",
-    "http://www.moe.gov.cn/jyb_xwfb/s271/"
+    "http://www.moe.gov.cn/jyb_xwfb/s271/",
+    "http://www.moe.gov.cn/was5/web/search?channelid=239993",
+    "https://www.cse.edu.cn/index/index.html?category=42",
+    
+    "https://mp.weixin.qq.com/mp/appmsgalbum?__biz=Mzg2ODA0ODkwNA==&action=getalbum&album_id=1409137364018216961&scene=173&subscene=&sessionid=svr_366a36a69f6&enterid=1716877342&from_msgid=2247527499&from_itemidx=1&count=3&nolastread=1#wechat_redirect",
+    "https://www.chyxx.com/wiki/jiaoyuye"
 ]
 
 HEADERS = {
@@ -61,19 +66,32 @@ def parse_cse_news(soup):
     return news_data
 
 def extract_cse_news_details(soup):
-    title = soup.find('h1').get_text(strip=True)
+    h1_tags = soup.find_all('h1', style='text-align: center; line-height: 2em;')
+    title = "".join([tag.get_text(strip=True) for tag in h1_tags])
+    
     content_div = soup.find('div', class_='main_con')
     content = content_div.get_text(strip=True) if content_div else ""
-    date_div = soup.find('div', class_='source_con')
-    if date_div:
-        date = date_div.find('time').get_text(strip=True)
-    else: 
-        date = None
+    
+    date_div = soup.find('time')
+    date = date_div.get_text(strip=True) if date_div else None
+    
     return title, content, date
+
+def parse_cse_42_news(soup):
+    news_data = []
+    news_section = soup.find('ul', class_='list_ul')
+    if news_section:
+        latest_news_links = news_section.find_all('a', href=True)
+        for link in latest_news_links:
+            news_url = link['href']
+            if not news_url.startswith('http'):
+                news_url = 'https://www.cse.edu.cn' + news_url
+            news_data.append(news_url)
+    return news_data
 
 def parse_moe_news(soup, base_url):
     news_data = []
-    news_section = soup.find('ul', id='list')
+    news_section = soup.find('ul', id="list")
     if news_section:
         latest_news_items = news_section.find_all('li')
         for item in latest_news_items:
@@ -90,6 +108,26 @@ def parse_moe_news(soup, base_url):
 def extract_moe_news_details(soup):
     title = soup.find('h1').get_text(strip=True)
     content_div = soup.find('div', class_='TRS_Editor')
+    content = content_div.get_text(strip=True) if content_div else ""
+    return title, content
+    
+def parse_moe_was5_news(soup):
+    news_data = []
+    news_section = soup.find('div', class_="scy_lbsj-right-nr")
+    if news_section:
+        latest_news_item = news_section.find_all('li')
+        for item in latest_news_item:
+            link = item.find('a', href=True)
+            date_span = item.find('span')
+            if link and date_span:
+                news_url = link['href']
+                date = date_span.get_text(strip=True)
+                news_data.append((news_url, date))
+    return news_data
+    
+def extract_moe_was5_details(soup):
+    title = soup.find('h1').get_text(strip=True)
+    content_div = soup.find('div', id_="downloadContent", class_="details-policy-box")
     content = content_div.get_text(strip=True) if content_div else ""
     return title, content
 
@@ -115,10 +153,14 @@ def fetch_latest_news(base_url, start_date):
         
         if url == base_url:
             # 根据base_url选择解析方法
-            if 'cse.edu.cn' in base_url:
+            if 'cse.edu.cn/index/index.html?category=59' in base_url:
                 latest_news_links = parse_cse_news(soup)
-            elif 'moe.gov.cn' in base_url:
+            elif 'cse.edu.cn/index/index.html?category=42' in base_url:
+                latest_news_links = parse_cse_42_news(soup)
+            elif 'moe.gov.cn/jyb_xwfb/' in base_url:
                 latest_news_links = parse_moe_news(soup, base_url)
+            elif 'moe.gov.cn/was5' in base_url:
+                latest_news_links = parse_moe_was5_news(soup)
             # 添加其他解析逻辑...
             
             for news_url in latest_news_links:
@@ -133,7 +175,6 @@ def fetch_latest_news(base_url, start_date):
             if 'cse.edu.cn' in base_url:
                 title, content, date = extract_cse_news_details(soup)
                 if datetime.strptime(date[-10:], "%Y-%m-%d").date() >= start_date:
-                # if True:
                     news_data.append({
                         'url': url,
                         'title': title,
@@ -143,7 +184,15 @@ def fetch_latest_news(base_url, start_date):
             elif 'moe.gov.cn' in base_url:
                 title, content = extract_moe_news_details(soup)
                 if datetime.strptime(date[-10:], "%Y-%m-%d").date() >= start_date:
-                # if True:
+                    news_data.append({
+                        'url': url,
+                        'title': title,
+                        'content': content,
+                        'date': date[-10:]
+                    })
+            elif 'moe.gov.cn/srcsite' in base_url:
+                title, content = extract_moe_was5_details(soup)
+                if datetime.strptime(date[-10:], "%Y-%m-%d").date() >= start_date:
                     news_data.append({
                         'url': url,
                         'title': title,
@@ -204,10 +253,10 @@ def fetch_backup_latest_news(base_url):
 
     return news_data
 
-@app.route('/fetch_news/<start_date>', methods=['GET'])
-def fetch_news(start_date):
+@app.route('/fetch_news/<prev_days>', methods=['GET'])
+def fetch_news(prev_days):
     print(f"Fetching news from URLs: {URL_LIST}")
-    start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+    start_date = date.today() - timedelta(days=int(prev_days))
     all_news_data = fetch_news_from_urls(URL_LIST, start_date)
     # 对 JSON 数据进行编码处理并确保使用 utf-8 编码
     json_data = json.dumps(all_news_data, ensure_ascii=False)
