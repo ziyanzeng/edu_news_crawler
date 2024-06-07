@@ -10,15 +10,14 @@ from collections import deque
 app = Flask(__name__)
 
 URL_LIST = [
-    # "https://www.cse.edu.cn/index/index.html?category=59",
-    # "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1778/",
-    # "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1779/",
-    # "http://www.moe.gov.cn/jyb_xwfb/s5148/",
-    # "http://www.moe.gov.cn/jyb_xwfb/s271/",
-    # "http://www.moe.gov.cn/was5/web/search?channelid=239993",
-    # "https://www.cse.edu.cn/index/index.html?category=42",
-    # "https://mp.weixin.qq.com/mp/appmsgalbum?__biz=Mzg2ODA0ODkwNA==&action=getalbum&album_id=1409137364018216961&scene=173&subscene=&sessionid=svr_366a36a69f6&enterid=1716877342&from_msgid=2247527499&from_itemidx=1&count=3&nolastread=1#wechat_redirect",
-    
+    "https://www.cse.edu.cn/index/index.html?category=59",
+    "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1778/",
+    "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1779/",
+    "http://www.moe.gov.cn/jyb_xwfb/s5148/",
+    "http://www.moe.gov.cn/jyb_xwfb/s271/",
+    "http://www.moe.gov.cn/was5/web/search?channelid=239993",
+    "https://www.cse.edu.cn/index/index.html?category=42",
+    "https://mp.weixin.qq.com/mp/appmsgalbum?__biz=Mzg2ODA0ODkwNA==&action=getalbum&album_id=1409137364018216961&scene=173&subscene=&sessionid=svr_366a36a69f6&enterid=1716877342&from_msgid=2247527499&from_itemidx=1&count=3&nolastread=1#wechat_redirect",
     "https://www.chyxx.com/wiki/jiaoyuye"
 ]
 
@@ -156,8 +155,12 @@ def parse_wechat_album(soup):
     return news_data
 
 def extract_wechat_article_details(soup):
-    title = soup.find('h1', class_='rich_media_title').get_text(strip=True)
-    content_div = soup.find('div', class_='rich_media_content mb-32')
+    try:
+        title = soup.find('h1', class_='rich_media_title').get_text(strip=True)
+    except AttributeError:
+        print("Title tag not found in provided soup...")
+        title = "教育报告"
+    content_div = soup.find('div', class_='rich_media_content', id='js_content')
     content = content_div.get_text(strip=True) if content_div else ""
     return title, content
 
@@ -208,7 +211,7 @@ def fetch_latest_news(base_url, start_date):
                 latest_news_links = parse_cse_news(soup)
             elif 'cse.edu.cn/index/index.html?category=42' in base_url:
                 latest_news_links = parse_cse_42_news(soup)
-            elif 'moe.gov.cn/jyb_xwfb/' in base_url:
+            elif 'moe.gov.cn/jyb_xwfb/' in base_url or 'moe.gov.cn/jyb_xxgk/' in base_url:
                 latest_news_links = parse_moe_news(soup, base_url)
             elif 'moe.gov.cn/was5' in base_url:
                 latest_news_links = parse_moe_was5_news(soup)
@@ -217,6 +220,8 @@ def fetch_latest_news(base_url, start_date):
             elif 'chyxx.com' in base_url:
                 latest_news_links = parse_chyxx_news(soup)
             # 添加其他解析逻辑...
+            
+            print(f"base url is: {base_url}")
             
             for news_url in latest_news_links:
                 if isinstance(news_url, tuple):
