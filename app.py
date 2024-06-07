@@ -221,7 +221,7 @@ def fetch_latest_news(base_url, start_date):
                 latest_news_links = parse_chyxx_news(soup)
             # 添加其他解析逻辑...
             
-            print(f"base url is: {base_url}")
+            # print(f"base url is: {base_url}")
             
             for news_url in latest_news_links:
                 if isinstance(news_url, tuple):
