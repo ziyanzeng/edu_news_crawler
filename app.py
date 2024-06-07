@@ -157,7 +157,7 @@ def parse_wechat_album(soup):
 
 def extract_wechat_article_details(soup):
     title = soup.find('h1', class_='rich_media_title').get_text(strip=True)
-    content_div = soup.find('div', class_='rich_media_content')
+    content_div = soup.find('div', class_='rich_media_content mb-32')
     content = content_div.get_text(strip=True) if content_div else ""
     return title, content
 
@@ -176,7 +176,7 @@ def parse_chyxx_news(soup):
 
 def extract_chyxx_article_details(soup):
     title = soup.find('h1', class_='cx-article__title').get_text(strip=True)
-    content_div = soup.find('div', class_='cx-article__content')
+    content_div = soup.find('div', class_='wiki-article__body')
     content = content_div.get_text(strip=True) if content_div else ""
     date_span = soup.find('span', class_='t-14 t-placeholder l-24 mr-32')
     date = date_span.get_text(strip=True) if date_span else ""
