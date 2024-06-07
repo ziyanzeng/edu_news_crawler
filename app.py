@@ -10,15 +10,15 @@ from collections import deque
 app = Flask(__name__)
 
 URL_LIST = [
-    "https://www.cse.edu.cn/index/index.html?category=59",
-    "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1778/",
-    "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1779/",
-    "http://www.moe.gov.cn/jyb_xwfb/s5148/",
-    "http://www.moe.gov.cn/jyb_xwfb/s271/",
-    "http://www.moe.gov.cn/was5/web/search?channelid=239993",
-    "https://www.cse.edu.cn/index/index.html?category=42",
+    # "https://www.cse.edu.cn/index/index.html?category=59",
+    # "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1778/",
+    # "http://www.moe.gov.cn/jyb_xxgk/moe_1777/moe_1779/",
+    # "http://www.moe.gov.cn/jyb_xwfb/s5148/",
+    # "http://www.moe.gov.cn/jyb_xwfb/s271/",
+    # "http://www.moe.gov.cn/was5/web/search?channelid=239993",
+    # "https://www.cse.edu.cn/index/index.html?category=42",
+    # "https://mp.weixin.qq.com/mp/appmsgalbum?__biz=Mzg2ODA0ODkwNA==&action=getalbum&album_id=1409137364018216961&scene=173&subscene=&sessionid=svr_366a36a69f6&enterid=1716877342&from_msgid=2247527499&from_itemidx=1&count=3&nolastread=1#wechat_redirect",
     
-    "https://mp.weixin.qq.com/mp/appmsgalbum?__biz=Mzg2ODA0ODkwNA==&action=getalbum&album_id=1409137364018216961&scene=173&subscene=&sessionid=svr_366a36a69f6&enterid=1716877342&from_msgid=2247527499&from_itemidx=1&count=3&nolastread=1#wechat_redirect",
     "https://www.chyxx.com/wiki/jiaoyuye"
 ]
 
@@ -119,7 +119,7 @@ def parse_moe_was5_news(soup):
         for item in latest_news_item:
             link = item.find('a', href=True)
             date_span = item.find('span')
-            if link and date_span:
+            if link and date_span: 
                 news_url = link['href']
                 date = date_span.get_text(strip=True)
                 news_data.append((news_url, date))
@@ -127,9 +127,60 @@ def parse_moe_was5_news(soup):
     
 def extract_moe_was5_details(soup):
     title = soup.find('h1').get_text(strip=True)
-    content_div = soup.find('div', id_="downloadContent", class_="details-policy-box")
+    content_div = soup.find('div', id='downloadContent')
     content = content_div.get_text(strip=True) if content_div else ""
     return title, content
+
+def parse_wechat_album(soup):
+    news_data = []
+    news_items = soup.find_all('li', class_='album__list-item js_album_item js_wx_tap_highlight wx_tap_cell')
+    
+    for item in news_items:
+        link = item.get('data-link')
+        date_tag = item.find('span', class_='js_article_create_time album__item-info-item')
+        if link and date_tag:
+            date_text = date_tag.get_text(strip=True)
+            
+            # 将 Unix 时间戳转换为日期
+            try:
+                date = datetime.fromtimestamp(int(date_text)).strftime('%Y-%m-%d')
+            except ValueError:
+                print(f"Invalid timestamp: {date_text}")
+                continue
+            
+            if not link.startswith('http'):
+                link = 'https://mp.weixin.qq.com' + link
+            
+            news_data.append((link, date))
+    
+    return news_data
+
+def extract_wechat_article_details(soup):
+    title = soup.find('h1', class_='rich_media_title').get_text(strip=True)
+    content_div = soup.find('div', class_='rich_media_content')
+    content = content_div.get_text(strip=True) if content_div else ""
+    return title, content
+
+
+def parse_chyxx_news(soup):
+    news_data = []
+    news_section = soup.find_all('li', class_='hot_item wiki-sublist__entry')
+    for item in news_section:
+        link = item.find('a', href=True)
+        if link:
+            news_url = link['href']
+            if not news_url.startswith('http'):
+                news_url = 'https://www.chyxx.com' + news_url
+            news_data.append(news_url)
+    return news_data
+
+def extract_chyxx_article_details(soup):
+    title = soup.find('h1', class_='cx-article__title').get_text(strip=True)
+    content_div = soup.find('div', class_='cx-article__content')
+    content = content_div.get_text(strip=True) if content_div else ""
+    date_span = soup.find('span', class_='t-14 t-placeholder l-24 mr-32')
+    date = date_span.get_text(strip=True) if date_span else ""
+    return title, content, date[:10]
 
 def fetch_latest_news(base_url, start_date):
     # 初始化队列和新闻数据
@@ -161,6 +212,10 @@ def fetch_latest_news(base_url, start_date):
                 latest_news_links = parse_moe_news(soup, base_url)
             elif 'moe.gov.cn/was5' in base_url:
                 latest_news_links = parse_moe_was5_news(soup)
+            elif 'mp.weixin.qq.com' in base_url:
+                latest_news_links = parse_wechat_album(soup)
+            elif 'chyxx.com' in base_url:
+                latest_news_links = parse_chyxx_news(soup)
             # 添加其他解析逻辑...
             
             for news_url in latest_news_links:
@@ -181,7 +236,7 @@ def fetch_latest_news(base_url, start_date):
                         'content': content,
                         'date': date[-10:]
                     })
-            elif 'moe.gov.cn' in base_url:
+            elif 'moe.gov.cn/jyb_xwfb' in base_url:
                 title, content = extract_moe_news_details(soup)
                 if datetime.strptime(date[-10:], "%Y-%m-%d").date() >= start_date:
                     news_data.append({
@@ -190,7 +245,7 @@ def fetch_latest_news(base_url, start_date):
                         'content': content,
                         'date': date[-10:]
                     })
-            elif 'moe.gov.cn/srcsite' in base_url:
+            elif 'moe.gov.cn/was5' in base_url:
                 title, content = extract_moe_was5_details(soup)
                 if datetime.strptime(date[-10:], "%Y-%m-%d").date() >= start_date:
                     news_data.append({
@@ -198,6 +253,28 @@ def fetch_latest_news(base_url, start_date):
                         'title': title,
                         'content': content,
                         'date': date[-10:]
+                    })
+            elif 'mp.weixin.qq.com' in base_url:
+                title, content = extract_wechat_article_details(soup)
+                date = date.strip()
+                try:
+                    if datetime.strptime(date, "%Y-%m-%d").date() >= start_date:  # 根据实际日期格式
+                        news_data.append({
+                            'url': url,
+                            'title': title,
+                            'content': content,
+                            'date': date
+                        })
+                except ValueError as e:
+                    print(f"Date parsing error for URL: {url}, date: {date}, error: {e}")
+            elif 'chyxx.com' in base_url:
+                title, content, date = extract_chyxx_article_details(soup)
+                if datetime.strptime(date, "%Y-%m-%d").date() >= start_date:
+                    news_data.append({
+                        'url': url,
+                        'title': title,
+                        'content': content,
+                        'date': date
                     })
             # 为其他网站添加相应的解析和提取逻辑...
     
